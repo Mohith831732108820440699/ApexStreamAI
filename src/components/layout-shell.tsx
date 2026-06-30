@@ -48,11 +48,12 @@ export default function LayoutShell({ children }: LayoutShellProps) {
 
   const navItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Authentication Test", href: "/auth-testing", icon: KeyRound },
+    { name: "Auth Portal Demo", href: "/auth-portal", icon: KeyRound },
+    { name: "Auth Agent Testing", href: "/auth-testing", icon: Bot },
     { name: "Subscription & Billing", href: "/subscriptions-testing", icon: CreditCard },
     { name: "Channel Integrations", href: "/channels-testing", icon: Tv },
     { name: "Streaming Engine", href: "/streaming-testing", icon: Activity },
-    { name: "AI Case Generator", href: "/ai-generator", icon: Bot },
+    { name: "AI Case Generator", href: "/ai-generator", icon: Layers },
     { name: "Security Scanner", href: "/security-scanner", icon: ShieldCheck },
     { name: "Performance Tester", href: "/load-tester", icon: Zap },
     { name: "Admin Dashboard", href: "/admin-panel", icon: Settings },

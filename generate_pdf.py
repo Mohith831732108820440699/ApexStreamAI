@@ -110,6 +110,7 @@ def generate_code_pdf():
         "src/app/page.tsx",
         
         # Interactive Testing Modules
+        "src/app/auth-portal/page.tsx",
         "src/app/auth-testing/page.tsx",
         "src/app/subscriptions-testing/page.tsx",
         "src/app/channels-testing/page.tsx",
