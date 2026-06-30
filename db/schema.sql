@@ -28,7 +28,12 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255), -- Nullable to allow OAuth-only logins
+    phone_number VARCHAR(50) UNIQUE, -- For Phone number OTP login
+    google_id VARCHAR(100) UNIQUE, -- For Google OAuth integrations
+    github_id VARCHAR(100) UNIQUE, -- For GitHub OAuth integrations
+    otp_code VARCHAR(10), -- Temporary SMS verification OTP code
+    otp_expires_at TIMESTAMP WITH TIME ZONE,
     role user_role DEFAULT 'qa_engineer',
     is_verified BOOLEAN DEFAULT FALSE,
     is_banned BOOLEAN DEFAULT FALSE,
@@ -37,6 +42,8 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_phone ON users(phone_number);
+CREATE INDEX idx_users_oauth ON users(google_id, github_id);
 
 ---------------------------------------------------------
 -- 2. Subscriptions Table

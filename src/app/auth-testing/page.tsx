@@ -6,7 +6,7 @@ import { KeyRound, ShieldAlert, CheckCircle, XCircle, Play, RefreshCw, Terminal,
 interface TestCase {
   id: string;
   name: string;
-  category: "Signup" | "Login" | "Google OAuth" | "Forgot Password" | "Email Verification";
+  category: "Signup" | "Login" | "Google OAuth" | "GitHub OAuth" | "Forgot Password" | "Email Verification" | "Phone OTP";
   assertionsCount: number;
   status: "idle" | "running" | "passed" | "failed";
   playwrightLogs: string[];
@@ -83,6 +83,51 @@ export default function AuthTesting() {
         "PLAYWRIGHT: Asserting application database creates record for new user",
         "PLAYWRIGHT: Verifying application JWT session creation",
         "RESULT: 4/4 Assertions Passed. Test Passed."
+      ]
+    },
+    {
+      id: "TC-AUTH-GH1",
+      name: "GitHub OAuth Integration Tests",
+      category: "GitHub OAuth",
+      assertionsCount: 4,
+      status: "idle",
+      assertions: [
+        "Assert callback exchanges auth code for access token successfully",
+        "Assert state parameter is verified against CSRF attacks",
+        "Assert email is fetched from GitHub secondary private emails API",
+        "Assert user profile data maps correctly to user record in database"
+      ],
+      playwrightLogs: [
+        "PLAYWRIGHT: Simulating click on 'Sign in with GitHub' button",
+        "PLAYWRIGHT: Intercepting callback redirect: code=git_code_8831&state=github_csrf_state",
+        "PLAYWRIGHT: Exchanging auth code for access token at github.com/login/oauth/access_token",
+        "PLAYWRIGHT: Fetching private emails from api.github.com/user/emails - Success",
+        "TEST: Verifying state parameter match - Passed",
+        "DATABASE: Merging GitHub profile (Mohith831732108820440699) with users registry",
+        "RESULT: 4/4 Assertions Passed. Test Passed."
+      ]
+    },
+    {
+      id: "TC-AUTH-OTP1",
+      name: "Phone Number OTP SMS Verification Tests",
+      category: "Phone OTP",
+      assertionsCount: 5,
+      status: "idle",
+      assertions: [
+        "Assert SMS payload complies with Twilio gateway schemas",
+        "Assert secure 6-digit OTP code is generated and stored in Redis cache",
+        "Assert OTP rate limiting triggers on exceeding 3 resend commands",
+        "Assert verification state sets to active on correct 6-digit match",
+        "Assert verification blocks expired OTP codes (after 120s limit)"
+      ],
+      playwrightLogs: [
+        "PLAYWRIGHT: Entering phone number '+91 8317321088' and clicking Request OTP",
+        "TEST: Verify Twilio SMS API webhook trigger - Success",
+        "REDIS: Set temporary OTP code key with TTL 120s: val='482910'",
+        "PLAYWRIGHT: Typing incorrect OTP code '111111' and asserting error modal",
+        "PLAYWRIGHT: Triggering resend SMS 3 times and verifying 429 rate limit blocker",
+        "PLAYWRIGHT: Typing correct OTP code '482910' and checking DB verification state",
+        "RESULT: 5/5 Assertions Passed. Test Passed."
       ]
     },
     {
