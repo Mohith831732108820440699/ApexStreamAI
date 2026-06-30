@@ -1,0 +1,219 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: streamtest-ai
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamtest-config
+  namespace: streamtest-ai
+data:
+  NODE_ENV: "production"
+  DATABASE_URL: "postgresql://streamtest:streamtest_secure_pass@postgres-service:5432/streamtest_db"
+  REDIS_URL: "redis://:redis_secure_pass@redis-service:6379/0"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: streamtest-secrets
+  namespace: streamtest-ai
+type: Opaque
+data:
+  # Base64 encoded secrets
+  JWT_SECRET: c3VwZXJfc2VjcmV0X2p3dF9zaWdua2V5XzEwMjkzOA== # super_secret_jwt_signkey_102938
+  STRIPE_SECRET_KEY: c2tfX21vY2tfZGFzaGJvYXJkX3NlY3JldF9mb3JfdGVzdGluZ19vbmx5 # sk__mock_dashboard_secret_for_testing_only
+---
+# Redis Service & Deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: streamtest-ai
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: streamtest-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--requirepass", "redis_secure_pass"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+# PostgreSQL Service & StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: streamtest-ai
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-statefulset
+  namespace: streamtest-ai
+spec:
+  serviceName: "postgres-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          env:
+            - name: POSTGRES_USER
+              value: "streamtest"
+            - name: POSTGRES_PASSWORD
+              value: "streamtest_secure_pass"
+            - name: POSTGRES_DB
+              value: "streamtest_db"
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-storage
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi
+---
+# Next.js Frontend Web Service & Deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: streamtest-ai
+spec:
+  ports:
+    - port: 80
+      targetPort: 3000
+  selector:
+    app: web
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+  namespace: streamtest-ai
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: gcr.io/streamtest-ai/frontend:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: streamtest-config
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: streamtest-secrets
+                  key: JWT_SECRET
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: streamtest-secrets
+                  key: STRIPE_SECRET_KEY
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+---
+# Horizontal Pod Autoscaler (HPA) for Web Frontend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+  namespace: streamtest-ai
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-deployment
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75

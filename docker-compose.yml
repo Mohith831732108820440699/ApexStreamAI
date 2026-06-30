@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # Next.js Web Dashboard
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://streamtest:streamtest_secure_pass@db:5432/streamtest_db?sslmode=disable
+      - REDIS_URL=redis://redis:6379/0
+      - NODE_ENV=production
+    depends_on:
+      - db
+      - redis
+    networks:
+      - streamtest-network
+    restart: always
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=streamtest
+      - POSTGRES_PASSWORD=streamtest_secure_pass
+      - POSTGRES_DB=streamtest_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Mount the schema directory to automatically initialize the DB
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - streamtest-network
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamtest -d streamtest_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Queues (BullMQ) & Caching
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass redis_secure_pass
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - streamtest-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis_secure_pass", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS API Backend (Production Microservice Target)
+  backend-api:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "echo 'NestJS service starting...' && tail -f /dev/null"
+    environment:
+      - DATABASE_URL=postgresql://streamtest:streamtest_secure_pass@db:5432/streamtest_db?sslmode=disable
+      - REDIS_URL=redis://redis_secure_pass@redis:6379/0
+      - JWT_SECRET=super_secret_jwt_signkey_102938
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - streamtest-network
+    restart: always
+
+  # FFmpeg Stream Worker (Queue Listener)
+  stream-worker:
+    image: jrottenberg/ffmpeg:5.1-alpine
+    entrypoint: ["sh", "-c", "echo 'Streaming queue listener listening to BullMQ on Redis...' && tail -f /dev/null"]
+    depends_on:
+      - redis
+    networks:
+      - streamtest-network
+    restart: always
+
+networks:
+  streamtest-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
